@@ -34,6 +34,12 @@ enum reionization_parametrization {
  * Is the input parameter the reionization redshift or optical depth?
  */
 
+enum xe_perturbation_type {
+	xe_pert_none,
+	xe_pert_basis,
+	xe_pert_control
+};
+
 enum reionization_z_or_tau {
   reio_z,  /**< input = redshift */
   reio_tau /**< input = tau */
@@ -78,6 +84,18 @@ struct thermo
   short compute_cb2_derivatives; /**< do we want to include in computation derivatives of baryon sound speed? */
 
   short compute_damping_scale; /**< do we want to compute the simplest analytic approximation to the photon damping (or diffusion) scale? */
+
+  /* XE PERTURBATION DECLARATIONS */
+
+  enum xe_perturbation_type xe_pert_type;
+  double * xe_control_points;
+  double * xe_control_pivots;
+  double * xe_mode_derivative;
+  int xe_pert_num;
+  double zmin_pert;
+  double zmax_pert;
+
+  int is_shooting;
 
   /** parameters for reio_camb */
 
@@ -184,6 +202,8 @@ struct recombination {
 
   int index_re_z;          /**< redshift \f$ z \f$ */
   int index_re_xe;         /**< ionization fraction \f$ x_e \f$ */
+  int index_re_xe_fid;
+  int index_re_xe_pert;
   int index_re_Tb;         /**< baryon temperature \f$ T_b \f$ */
   int index_re_wb;         /**< baryon equation of state parameter \f$ w_b \f$ */
   int index_re_cb2;        /**< squared baryon adiabatic sound speed \f$ c_b^2 \f$ */

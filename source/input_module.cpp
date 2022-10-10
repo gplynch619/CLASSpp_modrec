@@ -1479,6 +1479,47 @@ int InputModule::input_read_parameters() {
 
   /** - energy injection parameters from CDM annihilation/decay */
 
+  /* XE PERTURBATION PARAMETERS */
+
+  class_call(parser_read_string(pfc,"xe_pert_type",&(string1),&(flag1),errmsg), errmsg, errmsg);
+
+  if (flag1 == _TRUE_){
+  	if(strcmp(string1,"none")==0){
+		pth->xe_pert_type = xe_pert_none;
+	} else if (strcmp(string1,"control")==0){
+		pth->xe_pert_type = xe_pert_control;
+	} else {
+		class_stop(errmsg, "You specified 'xe_pert_type' as '%s'. It has to be one of {'none', 'control'}.", string1);	
+	}
+  }
+
+  switch(pth->xe_pert_type){
+  	case xe_pert_none:
+		break;
+	case xe_pert_control:
+		class_read_int("xe_pert_num", pth->xe_pert_num);
+
+		class_alloc(pth->xe_mode_derivative, pth->xe_pert_num*sizeof(double), errmsg);
+
+		class_call(parser_read_double(pfc,"zmin_pert",&param1,&flag2,errmsg), errmsg, errmsg);
+		if(flag2 ==_TRUE_){
+			pth->zmin_pert = param1;
+		}
+
+		class_call(parser_read_double(pfc,"zmax_pert",&param1,&flag2,errmsg), errmsg, errmsg);
+		if(flag2 ==_TRUE_){
+			pth->zmax_pert = param1;
+		}
+
+		class_call(parser_read_list_of_doubles(pfc,"xe_control_points",&entries_read,
+					&(pth->xe_control_points),&flag2,errmsg), errmsg, errmsg);
+		
+		class_call(parser_read_list_of_doubles(pfc,"xe_control_pivots",&entries_read,
+					&(pth->xe_control_pivots),&flag2,errmsg), errmsg, errmsg);
+  
+  }
+
+
   class_read_double("annihilation",pth->annihilation);
 
   if (pth->annihilation > 0.) {
@@ -3197,6 +3238,18 @@ int InputModule::input_default_params() {
   pba->cs2_fld = 1.;
 
   pba->background_method = bgevo_evolver;
+
+
+  /* xe perturbation defaults*/ 
+
+  pth->xe_pert_type = xe_pert_none;
+  pth->xe_mode_derivative = NULL;
+  pth->xe_control_points = NULL;
+  pth->xe_control_pivots = NULL;
+  pth->xe_pert_num = 0;
+  pth->zmin_pert = 100;
+  pth->zmax_pert = 4000;
+  pth->is_shooting = _FALSE_;
 
   /** - thermodynamics structure */
 

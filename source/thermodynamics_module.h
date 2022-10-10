@@ -67,6 +67,11 @@ public:
   //@{
 
   int index_th_xe_;            /**< ionization fraction \f$ x_e \f$ */
+
+  /* XE PERTURBATION additions */
+  int index_th_xe_fid_;
+  int index_th_xe_pert_;
+
   int index_th_rate_;          /**< maximum variation rate of \f$ exp^{-\kappa}\f$, g and \f$ (d g / d \tau) \f$, used for computing integration step in perturbation module */
   int index_th_tau_d_;         /**< Baryon drag optical depth */
   int index_th_dkappa_;        /**< Thomson scattering rate \f$ d \kappa / d \tau\f$ (units 1/Mpc) */
@@ -109,6 +114,12 @@ private:
   int thermodynamics_recombination(recombination* preco, double* pvecback);
   int thermodynamics_recombination_with_hyrec(recombination* prec, double* pvecback);
   int thermodynamics_recombination_with_recfast(recombination* prec, double* pvecback);
+  int thermodynamics_recombination_control_perturbations(recombination* preco);
+  int thermodynamics_recombination_control_transform(double x_fid, double * deltax);
+  int thermodynamics_root_bracket(double (*func)(double, double, double), double shift, double mult, double *x1, double *x2, ErrorMsg error_message);
+  double thermodynamics_root_bisect(double (*func)(double, double, double), double shift, double mult, double x1, double x2, ErrorMsg error_message);
+  static double thermodynamics_transform_function(double amplitude, double vshift, double xe_max);
+
   int thermodynamics_derivs_with_recfast_member(double z, double* y, double* dy, void* fixed_parameters, ErrorMsg error_message);
   static int thermodynamics_derivs_with_recfast(double z, double* y, double* dy, void* fixed_parameters, ErrorMsg error_message);
   int thermodynamics_merge_reco_and_reio(recombination* preco, reionization* preio);

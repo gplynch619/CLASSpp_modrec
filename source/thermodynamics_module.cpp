@@ -1337,6 +1337,10 @@ int ThermodynamicsModule::thermodynamics_indices(recombination* preco, reionizat
 
   index_th_xe_ = index;
   index++;
+  index_th_xe_fid_ = index;
+  index++;
+  index_th_xe_pert_ = index;
+  index++;
   index_th_dkappa_ = index;
   index++;
   index_th_tau_d_ = index;
@@ -1406,6 +1410,10 @@ int ThermodynamicsModule::thermodynamics_indices(recombination* preco, reionizat
   preco->index_re_z = index;
   index++;
   preco->index_re_xe = index;
+  index++;
+  preco->index_re_xe_fid = index;
+  index++;
+  preco->index_re_xe_pert = index;
   index++;
   preco->index_re_dkappadtau = index;
   index++;
@@ -3030,6 +3038,10 @@ int ThermodynamicsModule::thermodynamics_recombination(recombination* preco, dou
 
   }
 
+  if(pth->xe_pert_type==xe_pert_control){
+  	class_call(thermodynamics_recombination_control_perturbations(preco), error_message_, error_message_);
+  }
+
   return _SUCCESS_;
 
 }
@@ -3726,6 +3738,120 @@ int ThermodynamicsModule::thermodynamics_recombination_with_recfast(recombinatio
   return _SUCCESS_;
 }
 
+int ThermodynamicsModule::thermodynamics_recombination_control_perturbations(recombination* preco) {
+
+  int Nz, i;
+  double zinitial, zstart, zend, z;
+  double x_fid, deltax, x;
+
+  class_call(array_spline_table_lines(pth->xe_control_pivots,
+				pth->xe_pert_num,
+				pth->xe_control_points,
+				1,
+				pth->xe_mode_derivative,
+				_SPLINE_EST_DERIV_,
+				error_message_), error_message_, error_message_);
+  
+  Nz=ppr->recfast_Nz0;
+  zinitial = ppr->recfast_z_initial; /* Redshift range */
+  
+  for(i=0; i <Nz; i++) {
+    deltax = 0.0;
+    z = zinitial * (double)(Nz-i-1) / (double)Nz;
+    x_fid = *(preco->recombination_table+(Nz-i-1)*preco->re_size+preco->index_re_xe);
+	if(!(pth->is_shooting)){
+      if( (z>pth->zmin_pert) && (z<pth->zmax_pert)){
+	    int y_index = 1;
+		class_call(array_interpolate_spline(pth->xe_control_pivots,
+											pth->xe_pert_num,
+											pth->xe_control_points,
+											pth->xe_mode_derivative,
+											1,
+											z,
+											&y_index,
+											&deltax,
+											1,
+											error_message_),
+											error_message_, error_message_);
+		thermodynamics_recombination_control_transform(x_fid, &deltax);
+	  } 
+	}
+
+    *(preco->recombination_table+(Nz-i-1)*preco->re_size+preco->index_re_xe_fid) = x_fid;
+    *(preco->recombination_table+(Nz-i-1)*preco->re_size+preco->index_re_xe_pert) = deltax;
+    *(preco->recombination_table+(Nz-i-1)*preco->re_size+preco->index_re_xe) = x_fid+deltax;
+    
+	*(preco->recombination_table+(Nz-i-1)*preco->re_size+preco->index_re_dkappadtau) += (1.+z) * (1.+z) * preco->Nnow * (deltax) * _sigma_ * _Mpc_over_m_;
+
+  }
+
+
+  return _SUCCESS_;
+}
+
+int ThermodynamicsModule::thermodynamics_recombination_control_transform(double x_fid, double * deltax){
+  double xbound1, xbound2, xe_max;
+  double horizontal_shift, expit;
+  xbound1=-1.0;
+  xbound2=1.0;
+
+  xe_max=1.+(YHe_/2.0)*(1-YHe_);
+
+  thermodynamics_root_bracket(&ThermodynamicsModule::thermodynamics_transform_function, x_fid, xe_max, &xbound1, &xbound2, error_message_);
+
+  horizontal_shift = thermodynamics_root_bisect(&ThermodynamicsModule::thermodynamics_transform_function, x_fid, xe_max, xbound1, xbound2, error_message_);
+
+  //debugging
+  return _SUCCESS_;
+}
+
+#define NTRY 50
+#define FACTOR 1.6
+
+int ThermodynamicsModule::thermodynamics_root_bracket(double (*func)(double, double, double), double shift, double mult, double *x1, double *x2, ErrorMsg error_message){
+
+  int j;
+  double f1, f2;
+
+  if(*x1 == *x2) class_stop(error_message, "Bracketing range in root finding not valid");
+  f1=(*func)(*x1, shift, mult);
+  f2=(*func)(*x2, shift, mult);
+  for(j=1; j<NTRY; j++){
+    if(f1*f2 < 0.0) return 1;
+	if(fabs(f1) < fabs(f2)){
+	  f1 = (*func)(*x1 += FACTOR*(*x1-*x2), shift, mult);
+	} else {
+	  f2 = (*func)(*x2 += FACTOR*(*x2-*x1), shift, mult);
+	}
+  }
+  return 0;
+}
+
+#define ACC 1.0e-6 
+#define JMAX 50
+
+double ThermodynamicsModule::thermodynamics_root_bisect(double (*func)(double, double, double), double shift, double mult, double x1, double x2, ErrorMsg error_message){
+  int j;
+  double dx, f, fmid, xmid, rtb;
+
+  f=(*func)(x1, shift, mult);
+  fmid=(*func)(x2, shift, mult);
+  if(f*fmid >= 0.0) class_stop(error_message, "Initial range did not bracket a root");
+  rtb = f < 0.0 ? (dx=x2-x1, x1) : (dx=x1-x2, x2);
+  for(j=1; j<JMAX; j++){
+    fmid = (*func)(xmid=rtb+(dx*=0.5), shift, mult);
+	if(fmid <= 0.0) rtb=xmid;
+	if(fabs(dx) < ACC || fmid==0.0) return rtb;
+  }
+  class_stop(error_message, "Did not find root after maximum bisections");
+  return _SUCCESS_;
+}
+
+double ThermodynamicsModule::thermodynamics_transform_function(double amplitude, double vshift, double xe_max){
+  double expit = 1.0/(1.0 + exp(-amplitude));
+  return expit*xe_max - vshift;
+}
+
 /**
  * Subroutine evaluating the derivative with respect to redshift of
  * thermodynamical quantities (from RECFAST version 1.4).
@@ -4060,6 +4186,10 @@ int ThermodynamicsModule::thermodynamics_merge_reco_and_reio(recombination* prec
       preco->recombination_table[index_re*preco->re_size + preco->index_re_z];
     thermodynamics_table_[index_th*th_size_ + index_th_xe_] =
       preco->recombination_table[index_re*preco->re_size + preco->index_re_xe];
+    thermodynamics_table_[index_th*th_size_ + index_th_xe_fid_] =
+      preco->recombination_table[index_re*preco->re_size + preco->index_re_xe_fid];
+    thermodynamics_table_[index_th*th_size_ + index_th_xe_pert_] =
+      preco->recombination_table[index_re*preco->re_size + preco->index_re_xe_pert];
     thermodynamics_table_[index_th*th_size_ + index_th_dkappa_] =
       preco->recombination_table[index_re*preco->re_size + preco->index_re_dkappadtau];
     thermodynamics_table_[index_th*th_size_ + index_th_Tb_] =
@@ -4121,6 +4251,8 @@ int ThermodynamicsModule::thermodynamics_output_titles(char titles[_MAXTITLESTRI
   class_store_columntitle(titles,"z",_TRUE_);
   class_store_columntitle(titles,"conf. time [Mpc]",_TRUE_);
   class_store_columntitle(titles,"x_e",_TRUE_);
+  class_store_columntitle(titles,"x_fid",_TRUE_);
+  class_store_columntitle(titles,"xe_pert",_TRUE_);
   class_store_columntitle(titles,"kappa' [Mpc^-1]",_TRUE_);
   //class_store_columntitle(titles,"kappa''",_TRUE_);
   //class_store_columntitle(titles,"kappa'''",_TRUE_);
@@ -4174,6 +4306,8 @@ int ThermodynamicsModule::thermodynamics_output_data(int number_of_titles, doubl
     class_store_double(dataptr, z,_TRUE_, storeidx);
     class_store_double(dataptr, tau,_TRUE_, storeidx);
     class_store_double(dataptr, pvecthermo[index_th_xe_],_TRUE_, storeidx);
+    class_store_double(dataptr, pvecthermo[index_th_xe_fid_],_TRUE_, storeidx);
+    class_store_double(dataptr, pvecthermo[index_th_xe_pert_],_TRUE_, storeidx);
     class_store_double(dataptr, pvecthermo[index_th_dkappa_],_TRUE_, storeidx);
     //class_store_double(dataptr, pvecthermo[index_th_ddkappa_],_TRUE_, storeidx);
     //class_store_double(dataptr, pvecthermo[index_th_dddkappa_],_TRUE_, storeidx);
