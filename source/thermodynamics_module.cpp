@@ -3800,7 +3800,9 @@ int ThermodynamicsModule::thermodynamics_recombination_control_transform(double 
   thermodynamics_root_bracket(&ThermodynamicsModule::thermodynamics_transform_function, x_fid, xe_max, &xbound1, &xbound2, error_message_);
 
   horizontal_shift = thermodynamics_root_bisect(&ThermodynamicsModule::thermodynamics_transform_function, x_fid, xe_max, xbound1, xbound2, error_message_);
-
+	
+  expit = 1.0/(1.0 + exp(-((*deltax)+horizontal_shift)));
+  *deltax = expit*xe_max - x_fid;
   //debugging
   return _SUCCESS_;
 }
